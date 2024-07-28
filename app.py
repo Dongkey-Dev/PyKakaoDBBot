@@ -20,6 +20,9 @@ def py_exec_db():
         )
     request_data = json.loads(request.form['data'])
     replier = Replier(request_data)
+    print('================')
+    print(request_data)
+    print('================')
     @r.call_on_close
     def on_close():
         response(request_data["room"],

@@ -1,6 +1,7 @@
 from helper.KakaoDecrypt import KakaoDecrypt
 from helper.ObserverHelper import get_config
 import sqlite3
+import json
 import time
 import sys
 
@@ -10,6 +11,8 @@ class KakaoDB(KakaoDecrypt):
         self.DB_PATH = self.config["db_path"]
         self.BOT_ID = self.config["bot_id"]
         self.BOT_NAME = self.config["bot_name"]
+        self.CHAT_ID_DICT = {}
+        
         try:
             self.con = sqlite3.connect(f"{self.DB_PATH}/KakaoTalk.db")
         except:
@@ -27,17 +30,22 @@ class KakaoDB(KakaoDecrypt):
             return []
 
     def get_table_info(self):
-        self.cur.execute(f"SELECT name FROM sqlite_schema WHERE type='table';")
+        self.cur.execute(f"SELECT name FROM sqlite_master WHERE type='table';")
         tables = [table[0] for table in self.cur.fetchall()]
         return tables
 
     def get_name_of_user_id(self,user_id):
-        self.cur.execute(f"SELECT name,enc FROM db2.friends WHERE id=?",[user_id])
+        self.cur.execute(f"SELECT name,enc,nick_name FROM db2.friends WHERE id=?",[user_id])
         res = self.cur.fetchall()
         for row in res:
             row_name = row[0]
             enc = row[1]
-            dec_row_name = self.decrypt(enc, row_name)
+            if len(row) == 3 and row[2] != None:
+                nickname = row[2]
+                print(row[2])
+                print('-=-=')
+                return self.decrypt(enc, nickname)
+            dec_row_name = self.decrypt(enc, row_name)                
             return dec_row_name
 
     def get_user_info(self, chat_id, user_id):
@@ -45,13 +53,32 @@ class KakaoDB(KakaoDecrypt):
             sender = self.BOT_NAME
         else:
             sender = self.get_name_of_user_id(user_id)
+        
+        if chat_id in self.CHAT_ID_DICT:
+            return (self.CHAT_ID_DICT[chat_id], sender)
+        
         self.cur.execute(f'SELECT name FROM db2.open_link WHERE id = (SELECT link_id FROM chat_rooms WHERE id = ?);',[chat_id])
         res = self.cur.fetchall()
-        if res == []:
-            room = sender
-        else:
-            room = res[0][0]
-        return (room, sender)
+        
+        if len(res):
+            self.CHAT_ID_DICT[chat_id] = res[0][0]
+            return (res[0][0], sender)
+
+        self.cur.execute(f'SELECT private_meta, meta FROM chat_rooms WHERE id = ?;',[chat_id])
+        res = self.cur.fetchall()
+        
+        if res[0][0] != None:
+            room = res[0][0].split('"')[3]
+            self.CHAT_ID_DICT[chat_id] = room
+            return (room, sender)
+    
+        if "content" in res[0][1]:
+            room = json.loads(res[0][1])[0]["content"]
+            self.CHAT_ID_DICT[chat_id] = room
+            return (room, sender)
+        
+        return (sender, sender)
+        
 
     def get_row_from_log_id(self,log_id):
         self.cur.execute(f"SELECT * FROM chat_logs WHERE id = ?",[log_id])

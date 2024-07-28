@@ -1,5 +1,6 @@
 // tcp socket by Matsogeum
 // https://cafe.naver.com/nameyee/4195
+const scriptName = "socket";
 var thread1 = new java.lang.Thread({
     run: function() {
         try {
